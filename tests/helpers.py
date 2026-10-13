@@ -1,11 +1,7 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager
-
-from dramatiq.brokers.stub import StubBroker
-from dramatiq.worker import Worker
+from collections.abc import Callable
 
 
 def samples(metric) -> dict[tuple, float]:
@@ -29,19 +25,3 @@ def wait_until(
             return
         time.sleep(0.02)
     raise AssertionError(detail or "condition was not met")
-
-
-@contextmanager
-def running_worker(
-    prom, declare: Callable, *, worker_timeout: int = 50
-) -> Iterator[tuple]:
-    broker = StubBroker()
-    broker.add_middleware(prom)
-    declare(broker)
-    broker.emit_after("process_boot")
-    worker = Worker(broker, worker_threads=2, worker_timeout=worker_timeout)
-    worker.start()
-    try:
-        yield broker, worker
-    finally:
-        worker.stop()

@@ -8,7 +8,7 @@
 - [issue 627](https://github.com/Bogdanp/dramatiq/issues/627), открыт, pull request 627 не влит;
 - [issue 672](https://github.com/Bogdanp/dramatiq/issues/672), открыт, метка `prometheus`;
 - pull request 876 закрыт без merge;
-- тесты `tests/test_stock_bugs.py` и `tests/test_multiproc_e2e.py` этого репозитория.
+- тесты `tests/test_stock_bugs.py`, `tests/test_prometheus_e2e.py` и `tests/test_multiproc_e2e.py` этого репозитория. Рабочие e2e повторяют Dramatiq 2.2.1: фикстуры `stub_broker` / `stub_worker` (и такие же для Redis и RabbitMQ), актор через `@dramatiq.actor`, затем `broker.join` и `worker.join`. Redis и RabbitMQ пропускаются, если сервер недоступен.
 
 ## 1. Разные `queue_name` у увеличения и уменьшения
 

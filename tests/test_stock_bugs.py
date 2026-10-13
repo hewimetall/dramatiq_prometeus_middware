@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import os
 
+import dramatiq
 from dramatiq.message import Message
 from dramatiq.middleware.prometheus import Prometheus
-from helpers import running_worker, samples
+
+from helpers import samples
 
 BILLING = ("billing", "do_work")
 BILLING_DQ = ("billing.DQ", "do_work")
@@ -91,62 +93,59 @@ def test_stock_other_process_never_decrements_and_leaks_the_id() -> None:
     assert holder.delayed_messages == {"other-process"}
 
 
-def test_stock_retry_counter_includes_the_delay_queue_reenqueue() -> None:
+def test_stock_retry_counter_includes_the_delay_queue_reenqueue(
+    stock_stub_broker, stock_stub_worker, stock_prometheus
+) -> None:
     """The ETA handoff enqueues the same retry again, so the counter moves by 2."""
 
+    # Given that I have a database
     calls: list[int] = []
-    prom = Prometheus()
 
-    def declare(broker):
-        from dramatiq import actor
+    # And an actor that fails the first time it's called
+    @dramatiq.actor(queue_name="billing", max_retries=2, min_backoff=20, max_backoff=20)
+    def do_work():
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("transient")
 
-        @actor(
-            broker=broker,
-            queue_name="billing",
-            max_retries=2,
-            min_backoff=20,
-            max_backoff=20,
-        )
-        def do_work():
-            calls.append(1)
-            if len(calls) == 1:
-                raise RuntimeError("transient")
+    # If I send it a message
+    do_work.send()
 
-    with running_worker(prom, declare) as (broker, worker):
-        broker.get_actor("do_work").send()
-        broker.join("billing", timeout=5000)
-        worker.join()
+    # Then join on the queue
+    stock_stub_broker.join(do_work.queue_name, fail_fast=False, timeout=5000)
+    stock_stub_worker.join()
 
+    # I expect the retry to be counted on the delay queue and again on the canonical queue
     assert len(calls) == 2
-    assert samples(prom.total_retried_messages)[("billing.DQ", "do_work")] == 1.0
-    assert samples(prom.total_retried_messages)[("billing", "do_work")] == 1.0
+    assert (
+        samples(stock_prometheus.total_retried_messages)[("billing.DQ", "do_work")]
+        == 1.0
+    )
+    assert (
+        samples(stock_prometheus.total_retried_messages)[("billing", "do_work")] == 1.0
+    )
 
 
-def test_stock_worker_e2e_leaves_positive_dq_and_negative_canonical() -> None:
+def test_stock_worker_e2e_leaves_positive_dq_and_negative_canonical(
+    stock_stub_broker, stock_stub_worker, stock_prometheus
+) -> None:
+    # Given that I have an actor
     calls: list[str] = []
-    prom = Prometheus()
 
-    def declare(broker):
-        from dramatiq import actor
+    @dramatiq.actor(queue_name="billing")
+    def do_work():
+        calls.append(do_work.actor_name)
 
-        @actor(broker=broker, queue_name="billing")
-        def do_work():
-            calls.append(do_work.actor_name)
+    # When I send it a delayed message
+    do_work.send_with_options(delay=50)
 
-        return do_work
+    # And join on the queue
+    stock_stub_broker.join(do_work.queue_name, timeout=5000)
+    stock_stub_worker.join()
 
-    with running_worker(prom, declare) as (broker, worker):
-        do_work = declare_again(broker)
-        do_work.send_with_options(delay=50)
-        broker.join(do_work.queue_name, timeout=5000)
-        worker.join()
-        observed = samples(prom.inprogress_delayed_messages)
-
+    # Then the delay queue series is +1 and the canonical series is -1
+    observed = samples(stock_prometheus.inprogress_delayed_messages)
     assert calls == ["do_work"]
     assert observed[BILLING_DQ] == 1.0
     assert observed[BILLING] == -1.0
-    assert prom.delayed_messages == set()
-
-
-def declare_again(broker):
-    return broker.get_actor("do_work")
+    assert stock_prometheus.delayed_messages == set()

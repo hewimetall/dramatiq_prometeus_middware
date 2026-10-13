@@ -35,7 +35,9 @@ Documentation = "https://github.com/hewimetall/dramatiq_prometeus_middware/blob/
 [dependency-groups]
 dev = [
     "myst-parser>=4",
+    "pika>=1.3",
     "pytest>=8",
+    "redis>=5",
     "sphinx>=8",
 ]
 
@@ -43,3 +45,6 @@ dev = [
 testpaths = ["tests"]
 pythonpath = ["tests"]
 addopts = "-q"
+
+[tool.ruff.lint.isort]
+known-first-party = ["common", "dramatiq_prometheus_fix", "helpers"]

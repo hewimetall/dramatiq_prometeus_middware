@@ -28,11 +28,16 @@ dependencies = [
 dramatiq-prometheus = "dramatiq_prometheus_fix.cli:main"
 
 [project.urls]
-Documentation = "https://github.com/Bogdanp/dramatiq/issues/672"
-Source = "https://github.com/Bogdanp/dramatiq/blob/master/dramatiq/middleware/prometheus.py"
+Documentation = "https://github.com/hewimetall/dramatiq_prometeus_middware/blob/main/docs/index.md"
+"Issue 672" = "https://github.com/Bogdanp/dramatiq/issues/672"
+"Issue 627" = "https://github.com/Bogdanp/dramatiq/issues/627"
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = [
+    "myst-parser>=4",
+    "pytest>=8",
+    "sphinx>=8",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
